@@ -12,8 +12,8 @@ from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QFont, QTextCursor
 
 # Import scraper modules
-from main import (extract_user_id_from_url, extract_post_id_from_url, 
-                 fetch_comments_for_post, save_post_data)
+from main import (extract_user_id_from_url, extract_group_id_from_url, 
+                 extract_post_id_from_url, fetch_comments_for_post, save_post_data)
 from post_scraper import fetch_posts as fetch_page_posts
 from group_post_scraper_v2 import fetch_posts as fetch_group_posts
 import post_scraper
@@ -227,13 +227,12 @@ class ScraperThread(QThread):
             
             # Extract group ID from URL
             self.log(f"  Extracting group ID...")
-            match = re.search(r'/groups/(\d+)', url)
+            group_id = extract_group_id_from_url(url)
             
-            if not match:
+            if not group_id:
                 self.log(f"  ❌ Could not extract group ID from URL")
                 continue
             
-            group_id = match.group(1)
             self.log(f"  ✅ Extracted Group ID: {group_id}")
             
             try:

@@ -19,17 +19,32 @@ from single_post_image import fetch_all_images
 
 def extract_user_id_from_url(url):
     """Extract Facebook User ID from a profile URL"""
+    # First, try to extract ID directly from URL
+    url_patterns = [
+        r'profile\.php\?id=(\d+)',
+        r'/profile/(\d+)',
+        r'id=(\d+)'
+    ]
+    
+    for pattern in url_patterns:
+        match = re.search(pattern, url)
+        if match:
+            user_id = match.group(1)
+            print(f"  ✅ Found User ID in URL: {user_id}")
+            return user_id
+    
+    # If no ID in URL, fetch the page and search in HTML
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
         "Accept-Language": "en-US,en;q=0.9"
     }
     
     try:
-        print(f"  Fetching page: {url}")
+        print(f"  No ID in URL, fetching page: {url}")
         response = requests.get(url, headers=headers, proxies=PROXIES, timeout=20)
         html = response.text
         
-        # Try multiple patterns to find user ID
+        # Try multiple patterns to find user ID in HTML
         patterns = [
             r'fb://profile/(\d+)',           # BEST signal
             r'"profile_owner":"(\d+)"',
@@ -45,6 +60,56 @@ def extract_user_id_from_url(url):
                 return user_id
         
         print("  ❌ User ID not found (profile may be private or login wall)")
+        return None
+    
+    except Exception as e:
+        print(f"  ❌ Error fetching URL: {e}")
+        return None
+
+
+def extract_group_id_from_url(url):
+    """Extract Facebook Group ID from a group URL"""
+    # First, try to extract ID directly from URL
+    url_patterns = [
+        r'/groups/(\d+)',
+        r'group_id=(\d+)',
+        r'gid=(\d+)'
+    ]
+    
+    for pattern in url_patterns:
+        match = re.search(pattern, url)
+        if match:
+            group_id = match.group(1)
+            print(f"  ✅ Found Group ID in URL: {group_id}")
+            return group_id
+    
+    # If no ID in URL, fetch the page and search in HTML
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
+    
+    try:
+        print(f"  No ID in URL, fetching group page: {url}")
+        response = requests.get(url, headers=headers, proxies=PROXIES, timeout=20)
+        html = response.text
+        
+        # Try multiple patterns to find group ID in HTML
+        patterns = [
+            r'fb://group/(\d+)',              # BEST signal
+            r'fb://group/\?id=(\d+)',         # iOS URL format
+            r'"group_id":"(\d+)"',
+            r'"groupID":"(\d+)"'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, html)
+            if match:
+                group_id = match.group(1)
+                print(f"  ✅ Found Group ID: {group_id}")
+                return group_id
+        
+        print("  ❌ Group ID not found (group may be private or login wall)")
         return None
     
     except Exception as e:
@@ -364,10 +429,34 @@ def scrape_page_posts():
 def scrape_group_posts():
     """Scrape posts and comments from a group"""
     print("\n--- GROUP POST SCRAPER ---")
-    group_id = input("Enter Group ID: ").strip()
+    print("\nChoose input method:")
+    print("  1. Enter Group URL (auto-extract ID)")
+    print("  2. Enter Group ID directly")
     
-    if not group_id:
-        print("❌ Invalid group ID")
+    input_choice = input("Your choice (1 or 2): ").strip()
+    
+    group_id = None
+    
+    if input_choice == "1":
+        group_url = input("Enter Group URL: ").strip()
+        if not group_url:
+            print("❌ Invalid URL")
+            return
+        
+        # Extract group ID from URL
+        group_id = extract_group_id_from_url(group_url)
+        if not group_id:
+            print("❌ Could not extract Group ID from URL")
+            return
+    
+    elif input_choice == "2":
+        group_id = input("Enter Group ID: ").strip()
+        if not group_id:
+            print("❌ Invalid group ID")
+            return
+    
+    else:
+        print("❌ Invalid choice")
         return
     
     try:
