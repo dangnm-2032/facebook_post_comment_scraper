@@ -409,7 +409,7 @@ def extract_media(node, post_id, save_dir="page_post"):
             if single_media.get("__typename") == "Video":
                 media.append({
                     "type": "video",
-                    "url": single_media.get("playable_url")
+                    "url": single_media.get("videoDeliveryLegacyFields").get('browser_native_hd_url')
                 })
 
         # Check for album (multiple photos/videos)
@@ -451,8 +451,45 @@ def post_already_exists(post_id, base_folder, name_folder):
     post_file = os.path.join(base_folder, name_folder, str(post_id), f"{post_id}.json")
     return os.path.exists(post_file)
 
+def extract_reaction_count(node):
+    try:
+        return (node.get("comet_sections", {})
+                    .get("feedback", {})
+                    .get("story", {})
+                    .get("story_ufi_container", {})
+                    .get("story", {})
+                    .get("feedback_context", {})
+                    .get("feedback_target_with_context", {})
+                    .get("comet_ufi_summary_and_actions_renderer", {})
+                    .get("feedback", {})
+                    .get("reaction_count", {})
+                    .get("count"))
+    except Exception:
+        return None
 
-def fetch_posts(limit=10, min_comments=0, batch_size=10, on_batch_complete=None):
+def extract_creation_time(node):
+    try:
+        return (node.get("comet_sections", {})
+                    .get("timestamp", {})
+                    .get("story", {})
+                    .get("creation_time"))
+    except Exception:
+        return None
+
+def extract_share_count(node):
+    try:
+        return (node.get("comet_sections", {})
+                .get("feedback", {})
+                .get("story", {})
+                .get("feedback_context", {})
+                .get("feedback_target_with_context", {})
+                .get("feedback", {})
+                .get("share_count", {})
+                .get("count", 0))
+    except Exception:
+        return None
+
+def fetch_posts(limit=10, min_comments=0, date_filter=None, batch_size=10, on_batch_complete=None):
     """Fetch posts from Facebook page
     
     Args:
@@ -565,10 +602,14 @@ def fetch_posts(limit=10, min_comments=0, batch_size=10, on_batch_complete=None)
         
         # Process all collected Story nodes
         for node in story_nodes:
+
+            with open("node.json", "w", encoding="utf-8") as f:
+                json.dump(node, f, ensure_ascii=False, indent=4)
+            
             # Skip reels and video posts
-            if is_reel_or_video_post(node):
-                print(f"  ⏭️  Skipping reel/video post")
-                continue
+            # if is_reel_or_video_post(node):
+            #     print(f"  ⏭️  Skipping reel/video post")
+            #     continue
             
             # Check comment count threshold
             comment_count = extract_comment_count(node)
@@ -596,20 +637,30 @@ def fetch_posts(limit=10, min_comments=0, batch_size=10, on_batch_complete=None)
                 
             feedback_id = node.get("feedback", {}).get("id")
 
-            message = (
-                node.get("comet_sections", {})
-                .get("content", {})
-                .get("story", {})
-                .get("message", {})
-                .get("text")
-            )
+            try:
+                message = (
+                    node.get("comet_sections", {})
+                    .get("content", {})
+                    .get("story", {})
+                    .get("message", {})
+                    .get("text")
+                )
+            except Exception:
+                message = None
 
             permalink = None
             try:
                 permalink = (
                     node["attachments"][0]["styles"]["attachment"]["url"]
                 )
-            except Exception:
+            except Exception as e:
+                print(e)
+                pass
+
+            try:
+                permalink = node["permalink_url"]
+            except Exception as e:
+                print(e)
                 pass
 
             post = {
@@ -628,7 +679,18 @@ def fetch_posts(limit=10, min_comments=0, batch_size=10, on_batch_complete=None)
                     name_folder = "Unknown"
             else:
                 name_folder = "Unknown"
-            
+
+            # Extract creation time
+            post["creation_time"] = extract_creation_time(node)
+            # if date_filter and post["creation_time"] > date_filter:
+            #     break
+
+            # Extract reaction count
+            post["reaction_count"] = extract_reaction_count(node)
+
+            # Extract share count
+            post["share_count"] = extract_share_count(node)
+
             # Prepare save directory for media
             media_save_dir = os.path.join("page_post", name_folder)
             

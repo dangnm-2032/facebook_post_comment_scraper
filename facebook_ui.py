@@ -7,7 +7,7 @@ import requests
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QLineEdit, QPushButton, 
                              QTextEdit, QComboBox, QSpinBox, QTabWidget,
-                             QProgressBar, QGroupBox, QMessageBox)
+                             QProgressBar, QGroupBox, QMessageBox, QDateTimeEdit)
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QFont, QTextCursor
 
@@ -155,6 +155,7 @@ class ScraperThread(QThread):
         """Scrape posts from one or more pages"""
         urls = self.params['urls']  # List of URLs
         count = self.params['count']
+        date_filter = self.params['date_filter']
         
         total_pages = len(urls)
         all_posts_count = 0
@@ -202,7 +203,7 @@ class ScraperThread(QThread):
                             save_post_data("page_post", post_id, post, [])
                 
                 self.log(f"  Fetching {count} posts from page {page_id} (batch size: {batch_size})...")
-                posts = fetch_page_posts(count, min_comments, batch_size=batch_size, on_batch_complete=process_batch)
+                posts = fetch_page_posts(count, min_comments, date_filter, batch_size=batch_size, on_batch_complete=process_batch)
                 
                 self.log(f"  ✓ Completed: {len(posts)} posts processed")
                 
@@ -409,6 +410,16 @@ class FacebookScraperUI(QMainWindow):
         comment_layout.addWidget(self.page_min_comments)
         comment_layout.addStretch()
         input_layout.addLayout(comment_layout)
+
+        # Date filter
+        date_layout = QHBoxLayout()
+        date_layout.addWidget(QLabel("Date filter:"))
+        self.page_date_filter = QDateTimeEdit()
+        self.page_date_filter.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.page_date_filter.setToolTip("Only scrape posts from this date to now")
+        date_layout.addWidget(self.page_date_filter)
+        date_layout.addStretch()
+        input_layout.addLayout(date_layout)
         
         layout.addWidget(input_group)
         
@@ -499,6 +510,7 @@ class FacebookScraperUI(QMainWindow):
         urls_text = self.page_urls.toPlainText().strip()
         count = self.page_post_count.value()
         min_comments = self.page_min_comments.value()
+        date_filter = self.page_date_filter.dateTime().toUTC().toSecsSinceEpoch()
         
         if not urls_text:
             self.show_error("Please enter page URLs")
@@ -514,7 +526,7 @@ class FacebookScraperUI(QMainWindow):
         # Start scraping in background thread
         comment_filter_msg = f" with min {min_comments} comments" if min_comments > 0 else ""
         self.log(f"Starting page posts scraper for {len(urls)} page(s) (fetching {count} posts each{comment_filter_msg})...")
-        params = {'urls': urls, 'count': count, 'min_comments': min_comments}
+        params = {'urls': urls, 'count': count, 'min_comments': min_comments, 'date_filter': date_filter}
         self.start_scraping("page_posts", params)
     
     def scrape_group_posts(self):
